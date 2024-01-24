@@ -1,0 +1,314 @@
+from PIL import Image, ImageTk
+from tkinter import *
+from tkinter import Toplevel,Button,Tk,Menu
+from tkinter import messagebox
+import cv2
+import face_recognition
+import os
+from datetime import datetime
+import pyttsx3
+import pickle
+import numpy as np
+import email, smtplib, ssl
+
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+def new_registration():
+    def path_exists(path):
+        dir = os.path.dirname(path)
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+    def enter():
+        face_id = str(r.get())  # input('enter your id ')
+        cap = cv2.VideoCapture(0)
+        face_detector = cv2.CascadeClassifier(
+            'C:\\Users\\gurud\\AppData\\Local\\Programs\\Python\\Python310\\Lib\\site-packages\\cv2\\data\\haarcascade_frontalface_default.xml')
+        count = 0
+
+        path_exists("C:\\pythoncv\\dataset")
+        while (True):
+            _, image_frame = cap.read()
+            gray = cv2.cvtColor(image_frame, cv2.COLOR_BGR2GRAY)
+            faces = face_detector.detectMultiScale(gray, 1.3, 5)
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(image_frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                count += 1
+                cv2.imwrite("C:\\pythoncv\\dataset\\" + str(face_id) + '.' + str(count) + ".jpg",
+                            gray[y:y + h, x:x + w])
+                cv2.imshow('frame', image_frame)
+
+            if cv2.waitKey(100) & 0xFF == ord('q'):
+                break
+
+            elif count >= 1:
+                print("Successfully Captured")
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+        messagebox.showinfo("New Registration", "New Registration Completed!")
+    n = Toplevel(win)
+    n.geometry("300x100")
+    new = Label(n, text="enter your id :").place(x=10, y=20)
+    r = Entry(n,width=20,bg="light blue")
+    r.place(x=100, y=20)
+    training = Button(n, text="Enter", bg="black", fg="white", command=enter,width=20)
+    training.place(x=50, y=60)
+
+    n.mainloop()
+def sendmail():
+    subject = "An email with attachment from Python"
+    body = "This is an email with attachment sent from Python"
+    sender_email = " "
+    receiver_email = "  "
+    password = "uytdcvjk"
+
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Subject"] = subject
+    message["Bcc"] = receiver_email  # Recommended for mass emails
+
+    message.attach(MIMEText(body, "plain"))
+
+    filename = "dattendace.csv"
+
+    with open(filename, "rb") as attachment:
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(attachment.read())
+
+    encoders.encode_base64(part)
+
+    part.add_header(
+        "Content-Disposition",
+        f"attachment; filename= {filename}",
+    )
+
+    message.attach(part)
+    text = message.as_string()
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=context) as server:
+        server.login(sender_email, password)
+        server.sendmail(sender_email, receiver_email, text)
+def findEncodings(images):
+    empty_data = ""
+    filename = "Training.pkl"
+    with open(filename, 'wb') as file:
+        pickle.dump(empty_data, file)
+    encodeList = []
+
+    for img in images:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        encoded_face = face_recognition.face_encodings(img)[0]
+        encodeList.append(encoded_face)
+    with open(filename, 'wb') as file:
+        pickle.dump(encodeList, file)
+    return encodeList
+def train():
+    path = 'C:\pythoncv\dataset\projectdata'
+    images = []
+    classNames = []
+    mylist = os.listdir(path)
+    for cl in mylist:
+        curImg = cv2.imread(f'{path}/{cl}')
+        images.append(curImg)
+        classNames.append(os.path.splitext(cl)[0])
+    findEncodings(images)
+    print("training successful")
+    messagebox.showinfo("Training", "Training Successfull!")
+
+    p.mainloop()
+
+
+def takeattendance():
+    path = 'C:\pythoncv\dataset\projectdata'
+    images = []
+    classNames = []
+    mylist = os.listdir(path)
+    for cl in mylist:
+        curImg = cv2.imread(f'{path}/{cl}')
+        images.append(curImg)
+        classNames.append(os.path.splitext(cl)[0])
+
+    filename = "Training.pkl"
+
+    # Load the data from the file
+    with open(filename, 'rb') as file:
+        loaded_data = pickle.load(file)
+    encoded_face_train = loaded_data
+
+    def markAttendance(name):
+        with open('dattendace.csv', 'r+') as f:
+            myDataList = f.readlines()
+            nameList = []
+            for line in myDataList:
+                entry = line.split(',')
+                nameList.append(entry[0])
+            if name not in nameList:
+                now = datetime.now()
+                time = now.strftime('%I:%M:%S:%p')
+                date = now.strftime('%d-%B-%Y')
+                f.writelines(f'\n{name}, {time}, {date}')
+                '''engine = pyttsx3.init()
+                # convert this text to speech
+                text = name
+                engine.setProperty("rate", 80)
+                engine.say(text)
+
+                engine.runAndWait()'''
+
+    with open("dattendace.csv", 'r+') as file:
+        file.truncate(16)
+    cap = cv2.VideoCapture(0)
+    while True:
+        success, img = cap.read()
+        imgS = cv2.resize(img, (0, 0), None, 0.25, 0.25)
+        imgS = cv2.cvtColor(imgS, cv2.COLOR_BGR2RGB)
+        faces_in_frame = face_recognition.face_locations(imgS)
+        encoded_faces = face_recognition.face_encodings(imgS, faces_in_frame)
+        for encode_face, faceloc in zip(encoded_faces, faces_in_frame):
+            matches = face_recognition.compare_faces(encoded_face_train, encode_face,tolerance=0.42)
+            faceDist = face_recognition.face_distance(encoded_face_train, encode_face)
+            matchIndex = np.argmin(faceDist)
+            # print(matchIndex)
+            if matches[matchIndex]:
+                name = classNames[matchIndex].upper().lower()
+                y1, x2, y2, x1 = faceloc
+                # since we scaled down by 4 times
+                y1, x2, y2, x1 = y1 * 4, x2 * 4, y2 * 4, x1 * 4
+                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                cv2.rectangle(img, (x1, y2 - 35), (x2, y2), (50, 0, 0), cv2.FILLED)
+                cv2.putText(img, name, (x1 + 6, y2 - 5), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
+
+                markAttendance(name)
+            else:
+                name = "Unknown"
+                y1, x2, y2, x1 = faceloc
+                # since we scaled down by 4 times
+                y1, x2, y2, x1 = y1 * 4, x2 * 4, y2 * 4, x1 * 4
+                cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.rectangle(img, (x1, y2 - 35), (x2, y2), (0, 0, 255), cv2.FILLED)
+                cv2.putText(img, name, (x1 + 6, y2 - 5), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
+
+        cv2.imshow('webcam', img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    sendmail()
+    messagebox.showinfo("Take Attendance", "Attendance and sending mail Successfully!")
+def mainwindow():
+    p = Toplevel(win)
+    p.geometry("1400x900")
+    '''header_label = Label(p, text="Face Attendance System", font=("Helvetica", 16, "bold"))
+    header_label.place(x=500,y=30)'''
+    label=Label(p,image=img,bd=5,relief=SUNKEN)
+    label.pack(expand=True, fill= BOTH)
+    l = Label(p, text="Face Attendance System", fg="black", width="50",bg="light blue",font=30)
+    l.place(x=400, y=30)
+    take_attendance=Button(p,text="Take attendance",bg="black",fg="white",command=takeattendance)
+    take_attendance.place(x=600,y=100)
+    new_register=Button(p,text="New Registration",bg="black",fg="white",command=new_registration)
+    new_register.place(x=600,y=200)
+    training=Button(p,text="Training",bg="black",fg="white",command=train)
+    training.place(x=620,y=300)
+    p.mainloop()
+
+
+def facelock():
+    path = 'C:\pythoncv\dataset\csm'
+    images = []
+    classNames = []
+    mylist = os.listdir(path)
+    for cl in mylist:
+        curImg = cv2.imread(f'{path}/{cl}')
+        images.append(curImg)
+        classNames.append(os.path.splitext(cl)[0])
+    def findEncodings(images):
+        encodeList = []
+        for img in images:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            encoded_face = face_recognition.face_encodings(img)[0]
+            encodeList.append(encoded_face)
+        return encodeList
+    encoded_face_train = findEncodings(images)
+
+
+    cap  = cv2.VideoCapture(0)
+    stop=0
+    while stop==0:
+        success, img = cap.read()
+        imgS = cv2.resize(img, (0,0), None, 0.25,0.25)
+        imgS = cv2.cvtColor(imgS, cv2.COLOR_BGR2RGB)
+        faces_in_frame = face_recognition.face_locations(imgS)
+        encoded_faces = face_recognition.face_encodings(imgS, faces_in_frame)
+        for encode_face, faceloc in zip(encoded_faces,faces_in_frame):
+            matches = face_recognition.compare_faces(encoded_face_train, encode_face)
+            faceDist = face_recognition.face_distance(encoded_face_train, encode_face)
+            matchIndex = np.argmin(faceDist)
+            #print(matchIndex)
+            if matches[matchIndex]:
+
+                name = classNames[matchIndex].upper().lower()
+                y1,x2,y2,x1 = faceloc
+                # since we scaled down by 4 times
+                y1, x2,y2,x1 = y1*4,x2*4,y2*4,x1*4
+                cv2.rectangle(img,(x1,y1),(x2,y2),(255,0,0),2)
+                cv2.rectangle(img, (x1,y2-35),(x2,y2), (50,0,0), cv2.FILLED)
+                cv2.putText(img,name, (x1+6,y2-5), cv2.FONT_HERSHEY_COMPLEX,1,(255,255,255),2)
+                mainwindow()
+                '''p = Toplevel(win)
+                p.geometry("1400x900")
+                l = Label(p, text="Login sucessful", fg="green", width="20")
+                l.place(x=500, y=30)'''
+                stop=2
+                
+            else:
+                name = "Unknown"
+                y1, x2, y2, x1 = faceloc
+                # since we scaled down by 4 times
+                y1, x2, y2, x1 = y1 * 4, x2 * 4, y2 * 4, x1 * 4
+                cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                cv2.rectangle(img, (x1, y2 - 35), (x2, y2), (50, 0, 0), cv2.FILLED)
+                cv2.putText(img, name, (x1 + 6, y2 - 5), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
+
+        #cv2.imshow('webcam', img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+win=Tk()
+win.title("Face Attendance System")
+win.geometry("1400x900")
+bg= ImageTk.PhotoImage(file="C:\\Users\\gurud\\Downloads\\fr bg.png")
+#bg= ImageTk.PhotoImage(file="C:\\Users\\gurud\\OneDrive\\Documents\\facepro image.png")
+canvas= Canvas(win,width= 400, height= 200)
+canvas.pack(expand=True, fill= BOTH)
+canvas.create_image(0,0,image=bg, anchor="nw")
+canvas.create_text(310,550,text="Hello ", font= ('Courier 45 bold'))
+img=PhotoImage(name="img",file="C:\\Users\\gurud\\Downloads\\fr bg.png")
+def validate():
+    if user_name == str(a.get()) and password == str(b.get()):
+        mainwindow()
+    else:
+        p=Toplevel(win)
+        p.geometry("250x100")
+        l=Label(p,text="incorrect username and password",fg="red")
+        l.place(x=20,y=30)
+
+
+un=Label(win,text="USER NAME :").place(x=200,y=300)
+a=(Entry())
+a.place(x=300,y=300)
+pas=Label(win,text="PASSWORD :").place(x=200,y=350)
+b=Entry(show="*")
+b.place(x=300,y=350)
+user_name="dileep"
+password="4208"
+'''if user_name==str(a.get()) and password==str(b.get()):
+    p = Toplevel(win)'''
+b1=Button(win,text="login",bg="black",fg="red",width=20,command=validate)
+b1.place(x=250,y=400)
+b2=Button(win,text="Face login",bg="black",fg="red",width=20,command=facelock)
+b2.place(x=250,y=450)
+
+win.mainloop()
